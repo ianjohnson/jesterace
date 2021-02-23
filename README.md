@@ -50,3 +50,12 @@ tap2tzx.py -o FIREONE.TZX FIRE.TAP ONE.TAP
 
 Use the `FIREONE.TZX` file with your emulator.
 
+## List TAP file contents
+
+The contents of a TAP file can be listed with the `tapls.py` utility. To list the `FireOne.tap` file, for example:
+
+```
+tapls.py FireOne.tap
+```
+
+You can specify as many TAP files as you require.
