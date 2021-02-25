@@ -4,13 +4,7 @@ Jester Ace is the micro SD Card reader for the [Tynemouth Software](http://www.t
 
 ## Using the Jester Ace with existing TZX Files
 
-The [Jupiter Ace Archive](https://www.jupiter-ace.co.uk/) has a large collection of software for the Jupiter Ace/Minstrel 4th in TZX format. This resource can be used with the Jester Ace by using the [tzxtools](https://github.com/shred/tzxtools) suite and the utilities provided here.
-
-Processing the TZX file can be done by:
-  * Convert a TZX file to TAP format using `tzxtap`, and for multi-program TAP files,
-  * Use `tapsplit.py` to split into individual TAP files.
-
-The zxtools `tzxtap` sometimes does not convert TZX files properly, so your mileage may vary using this tool. If you have a familiarity with the TZX format some file editing can get it through the conversion process.
+The [Jupiter Ace Archive](https://www.jupiter-ace.co.uk/) has a large collection of software for the Jupiter Ace/Minstrel 4th in TZX format. This resource can be used with the Jester Ace by using the `tzx2tap.py` utility available here. This utility converts TZX files, writing TAP files into separate directories associated with each TZX file specified. All generated directory and file names will be compatible with the SD card file system. They can be copied directly to your SD card. The name of the generated directory is the first 8 uppercased characters of the TZX filename. Generated TAP files will have filenames as the first 8 uppercased characters from the filename in the header block stored in the TZX file. Separate TAP files will be generated for each program stored in the TZX file.
 
 ### TZX File Conversion Example
 
@@ -25,16 +19,24 @@ unzip FireOne-tzx-091.zip
 2. Convert TZX to TAP file
 
 ```
-tzxtap -o FireOne.tap FireOne-091.tzx
+tzx2tap.py FireOne-091.tzx
 ```
 
-3. Split the TAP file
+This produces two files: `FIRE.TAP` and `ONE.TAP` in a directory called `FIREONE-`. Copy the `FIREONE-` directory to your SD card, and follow the game's [loading instructions](https://www.jupiter-ace.co.uk/sw_nine_games_fire_one.html).
+
+## Using the Jester Ace with existing TAP Files
+
+You may have got Jupiter Ace compatible TAP files from an emulator. These files can be used with the Jester Ace providing they contain only one program. Use the `tapls.py` to ascertain the number of programs in your TAP file. If more than one program, then use the `tapsplit.py` utility to split the TAP file into its individual programs. TAP files will be generated for each program in the conglomerate TAP file. A TAP file's filename will be the first 8 uppercased characters of the filename stored in the TAP header block of each program.
+
+### TAP file spliting example
+
+Spliting the Fire One TAP file:
 
 ```
 tapsplit.py FireOne.tap
 ```
 
-This produces two files: `FIRE.TAP` and `ONE.TAP`. Copy these files to your SD card, and follow the game's [loading instructions](https://www.jupiter-ace.co.uk/sw_nine_games_fire_one.html).
+This will generate two files: `FIRE.TAP` and `ONE.TAP`. These files can be copied to the SD card used with the Jester Ace.
 
 ## Using Jester Ace TAP files with Emulators
 
