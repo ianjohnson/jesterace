@@ -27,6 +27,18 @@ import os
 import sys
 
 
+class BlockUnexpectedTypeException(Exception):
+  def __init__(self, klass, offset, bid):
+    super(BlockUnexpectedTypeException, self).__init__()
+    self.__class = klass
+    self.__offset = offset
+    self.__bid = bid
+
+  def __str__(self):
+    return "Unexpected block at offset [%d], expected %s block, got [0x%.2x]" % \
+      (self.__offset, self.__class, self.__bid)
+
+
 class BlockDataExhausted(Exception):
   pass
 
@@ -50,7 +62,10 @@ class Block(object):
 
 class Header(Block):
   def __init__(self, tap_file):
+    pos = tap_file.tell()
     super(Header, self).__init__(tap_file)
+    if self._data[2] != 0x00:
+      raise BlockUnexpectedTypeException("header", pos, self._data[2])
 
   def filename(self):
     return self._data[4:14].decode("utf-8").strip()
@@ -58,7 +73,10 @@ class Header(Block):
 
 class Data(Block):
   def __init__(self, tap_file):
+    pos = tap_file.tell()
     super(Data, self).__init__(tap_file)
+    if self._data[2] != 0xff:
+      raise BlockUnexpectedTypeException("header", pos, self._data[2])
 
 
 def tap_split(tap_file, max_filename_len):
@@ -83,7 +101,7 @@ def tap_split(tap_file, max_filename_len):
 if __name__ == '__main__':
   import argparse
 
-  __VERSION = "1.0.2"
+  __VERSION = "1.0.3"
   default_max_filename_len = 8
 
   parser = argparse.ArgumentParser(prog = "tapsplit.py",

@@ -41,7 +41,7 @@ class TapBlock(object):
     self._data = tap_file.read(self.__block_length)
     if not self._data or len(self._data) != self.__block_length:
       raise BlockDataExhausted
-    self._checksum = functools.reduce(lambda acc, b: acc ^ b, self._data[2:-1], self._data[1])
+    self._checksum = functools.reduce(lambda acc, b: acc ^ b, self._data[1:-1], 0)
     if self._checksum != self._data[-1]:
       if correct_checksum:
         self._data = self._data[:-1] + bytes([self._checksum])
@@ -84,7 +84,7 @@ def tap_to_tzx(tap_filenames, tzx_filename, block_delay, correct_checksum):
 if __name__ == '__main__':
   import argparse
 
-  __VERSION = "1.0.1"
+  __VERSION = "1.0.2"
   default_delay_ms = 100
 
   parser = argparse.ArgumentParser(prog = "tap2tzx.py",

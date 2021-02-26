@@ -37,20 +37,35 @@ def tzx_block(klass):
   return klass
 
 
-class TZXFileNotValidError(Exception):
-  pass
+class TZXFileException(Exception):
+  def __init__(self, tzx_file):
+    super(TZXFileException, self).__init__()
+    self.tzx_file = os.path.realpath(tzx_file)
 
 
-class TXZBlockUnsupportedException(Exception):
-  def __init__(self, block_id):
-    self.__block_id = block_id
+class TZXFileNotValidException(TZXFileException):
+  def __str__(self):
+    return "[%s] is not a valid TZX file" % self.tzx_file
+
+
+class TXZBlockUnsupportedException(TZXFileException):
+  def __init__(self, tzx_file, unsupported_block_id):
+    super(TXZBlockUnsupportedException, self).__init__(tzx_file)
+    self.unsupported_block_id = unsupported_block_id
 
   def __str__(self):
-    return "Unsupported block ID [%X]" % self.__block_id
+    return "[%s] contains an unsupported TZX block [ID = %.2X]" % \
+      (self.tzx_file, self.unsupported_block_id)
 
 
-class TZXDataBlockIncorrectCountException(Exception):
-  pass
+class TZXDataBlockIncorrectCountException(TZXFileException):
+  def __init__(self, tzx_file, no_blocks):
+    super(TZXDataBlockIncorrectCountException, self).__init__(tzx_file)
+    self.no_blocks = no_blocks
+
+  def __str__(self):
+    return "[%s] contains an unexpected number of standard speed data blocks [count = %d]" % \
+      (self.tzx_file, self.no_blocks)
 
   
 class TZXBlock(object):
@@ -62,10 +77,7 @@ class TZXBlock(object):
       setattr(self, attr_name, value)
 
 
-@tzx_block
 class TZXHeader(TZXBlock):
-  BLOCK_ID = 0x5a
-
   def __init__(self, fd):
     super(TZXHeader, self).__init__(fd, [('signature', 7),
                                          ('end_of_text_marker', 1),
@@ -269,20 +281,69 @@ class TZXCustomInfoBlock(TZXBlock):
     self.__info = i
 
 
+@tzx_block
+class TZXGlueBlock(TZXBlock):
+  BLOCK_ID = 0x5a
+
+  def __init__(self, fd):
+    super(TZXGlueBlock, self).__init__(fd, [('signature', 6),
+                                            ('end_of_text_marker', 1),
+                                            ('tzx_major_version', 1),
+                                            ('tzx_minor_version', 1)])
+
+  @property
+  def signature(self):
+    return self.__signature
+
+  @signature.setter
+  def signature(self, sig):
+    self.__signature = sig.decode('utf-8')
+
+  @property
+  def end_of_text_marker(self):
+    return self.__eot_marker
+
+  @end_of_text_marker.setter
+  def end_of_text_marker(self, eotm):
+    self.__eot_marker = int.from_bytes(eotm, byteorder = 'little')
+
+  @property
+  def tzx_major_version(self):
+    return self.__tzx_major_version
+
+  @tzx_major_version.setter
+  def tzx_major_version(self, major_ver):
+    self.__tzx_major_version = int.from_bytes(major_ver, byteorder = 'little')
+
+  @property
+  def tzx_minor_version(self):
+    return self.__tzx_minor_version
+
+  @tzx_minor_version.setter
+  def tzx_minor_version(self, minor_ver):
+    self.__tzx_minor_version = int.from_bytes(minor_ver, byteorder = 'little')
+
+  @property
+  def is_valid(self):
+    return self.signature == 'XTape!' and self.end_of_text_marker == 0x1a
+
+  def __str__(self):
+    return "%s v%d.%d" % (self.signature, self.tzx_major_version, self.tzx_minor_version)
+
+
 def tzx_parse(tzx_fd):
   hdr = TZXHeader(tzx_fd)
-  if not hdr.is_valid:
-    raise TZXFileNotValidError()
-
   blocks = [hdr]
   block_id = tzx_fd.read(1)
   while block_id:
-    if block_id not in block_id_registry:
-      raise TXZBlockUnsupportedException(int.from_bytes(block_id, byteorder = 'little'))
-    klass = block_id_registry[block_id]
-    block = klass(tzx_fd)
-    blocks.append(block)
-    block_id = tzx_fd.read(1)
+    if block_id in block_id_registry:
+      klass = block_id_registry[block_id]
+      block = klass(tzx_fd)
+      blocks.append(block)
+      block_id = tzx_fd.read(1)
+    else:
+      blocks.append(int.from_bytes(block_id, byteorder = 'little'))
+      block_id = None
 
   return blocks
 
@@ -290,10 +351,15 @@ def tzx_parse(tzx_fd):
 def tzx_convert(tzx_file, tap_dir):
   with open(tzx_file, 'rb') as tzx_fd:
     tzx_blocks = tzx_parse(tzx_fd)
+    if not len(tzx_blocks) or not isinstance(tzx_blocks[0], TZXHeader) or not tzx_blocks[0].is_valid:
+      raise TZXFileNotValidException(tzx_file)
+    tzx_unsupported_blocks = list(filter(lambda blk: isinstance(blk, int), tzx_blocks))
+    if len(tzx_unsupported_blocks):
+      raise TXZBlockUnsupportedException(tzx_file, tzx_unsupported_blocks[0])
     tzx_data_blocks = list(filter(lambda blk: isinstance(blk, TZXStandardSpeedDataBlock),
                                   tzx_blocks))
     if len(tzx_data_blocks) % 2:
-      raise TZXDataBlockIncorrectCountException("%d standard speed data blocks" % len(tzx_data_blocks))
+      raise TZXDataBlockIncorrectCountException(tzx_file, len(tzx_data_blocks))
     tzx_data_block_pairs = [(tzx_data_blocks[i], tzx_data_blocks[i+1]) \
                             for i in range(0, len(tzx_data_blocks) - 1, 2)]
     tap_names = dict()
@@ -309,6 +375,9 @@ def tzx_convert(tzx_file, tap_dir):
         tap_names[tap_name] = 1
       tap_filename = re.sub(r'[\\/:\*"<>|?]', "_", tap_name + '.TAP')
       tap_pathname = os.path.join(tap_dir, tap_filename)
+      print(os.path.basename(tzx_file), file = sys.stderr)
+      print("  +--> Found header block of length %d bytes" % tzx_hdr.block_length, file = sys.stderr)
+      print("  +--> Found data block of length %d bytes" % tzx_data.block_length, file = sys.stderr)
       with open(tap_pathname, 'wb') as tap_fd:
         tap_fd.write(tzx_hdr.block_length_bytes)
         tap_fd.write(tzx_hdr.block_data)
@@ -329,13 +398,17 @@ def tzx_to_tap(tzx_files, root_dir, force):
     else:
       os.mkdir(tap_dir)
 
-    tzx_convert(tzx_file, tap_dir)
+    try:
+      tzx_convert(tzx_file, tap_dir)
+    except TZXFileException as ex:
+      os.rmdir(tap_dir)
+      raise ex
     
 
 if __name__ == '__main__':
   import argparse
 
-  __VERSION = "1.0.0"
+  __VERSION = "1.0.1"
 
   default_root_dir = os.path.realpath(".")
 
