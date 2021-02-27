@@ -70,10 +70,15 @@ class TZXDataBlockIncorrectCountException(TZXFileException):
   
 class TZXBlock(object):
   def __init__(self, fd, attributes):
-    for attr_name, no_bytes in attributes:
-      if callable(no_bytes):
-        no_bytes = no_bytes()
-      value = fd.read(no_bytes)
+    for attr_name, no_bytes_or_callable in attributes:
+      if callable(no_bytes_or_callable):
+        try:
+          no_bytes_or_obj = no_bytes_or_callable(fd)
+        except TypeError:
+          no_bytes_or_obj = no_bytes_or_callable()
+      else:
+        no_bytes_or_obj = no_bytes_or_callable
+      value = fd.read(no_bytes_or_obj) if isinstance(no_bytes_or_obj, int) else no_bytes_or_obj
       setattr(self, attr_name, value)
 
 
@@ -190,7 +195,7 @@ class TZXTextDescription(TZXBlock):
 
 @tzx_block
 class TZXMessageBlock(TZXBlock):
-  BLOCK_ID = 0x32
+  BLOCK_ID = 0x31
 
   def __init__(self, fd):
     super(TZXMessageBlock, self).__init__(fd, [('time', 1),
@@ -223,27 +228,123 @@ class TZXMessageBlock(TZXBlock):
 
 
 @tzx_block
+class TZXArchiveInfoBlock(TZXBlock):
+  BLOCK_ID = 0x32
+
+  class ArchiveText(TZXBlock):
+    def __init__(self, fd):
+      super(TZXArchiveInfoBlock.ArchiveText, self).__init__(fd, [('identity', 1),
+                                                                 ('length', 1),
+                                                                 ('text', lambda: self.length)])
+
+    @property
+    def identity(self):
+      return self.__identity
+
+    @identity.setter
+    def identity(self, i):
+      self.__identity = int.from_bytes(i, byteorder = 'little')
+
+    @property
+    def length(self):
+      return self.__length
+
+    @length.setter
+    def length(self, l):
+      self.__length = int.from_bytes(l, byteorder = 'little')
+
+    @property
+    def text(self):
+      return self.__text
+
+    @text.setter
+    def text(self, t):
+      self.__text = t.decode('utf-8')
+
+  def __init__(self, fd):
+    super(TZXArchiveInfoBlock, self).__init__(fd, [('length', 2),
+                                                   ('number_of_strings', 1),
+                                                   ('text', lambda fd: list(map(lambda _: TZXArchiveInfoBlock.ArchiveText(fd), \
+                                                                                range(0, self.number_of_strings))))])
+
+  @property
+  def length(self):
+    return self.__length
+
+  @length.setter
+  def length(self, l):
+    self.__length = int.from_bytes(l, byteorder = 'little')
+
+  @property
+  def number_of_strings(self):
+    return self.__number_of_strings
+
+  @number_of_strings.setter
+  def number_of_strings(self, ns):
+    self.__number_of_strings = int.from_bytes(ns, byteorder = 'little')
+
+  @property
+  def text(self):
+    return self.__text
+
+  @text.setter
+  def text(self, t):
+    self.__text = t
+
+
+@tzx_block
 class TZXHardwareTypeBlock(TZXBlock):
   BLOCK_ID = 0x33
 
+  class HardwareInfo(TZXBlock):
+    def __init__(self, fd):
+      super(TZXHardwareTypeBlock.HardwareInfo, self).__init__(fd, [('type', 1),
+                                                                   ('identifier', 1),
+                                                                   ('information', 1)])
+
+    @property
+    def type(self):
+      return self.__type
+
+    @type.setter
+    def type(self, t):
+      self.__type = int.from_bytes(t, byteorder = 'little')
+
+    @property
+    def identifier(self):
+      return self.__identifier
+
+    @identifier.setter
+    def identifier(self, i):
+      self.__identifier = int.from_bytes(i, byteorder = 'little')
+
+    @property
+    def information(self):
+      return self.__information
+
+    @information.setter
+    def information(self, i):
+      self.__information = int.from_bytes(i, byteorder = 'little')
+
   def __init__(self, fd):
-    super(TZXHardwareTypeBlock, self).__init__(fd, [('number', 1),
-                                                    ('hwinfo', lambda: self.number * 3)])
+    super(TZXHardwareTypeBlock, self).__init__(fd, [('number_of_types', 1),
+                                                    ('hardware_info', lambda fd: list(map(lambda _: TZXHardwareTypeBlock.HardwareInfo(fd), \
+                                                                                          range(0, self.number_of_types))))])
 
   @property
-  def number(self):
+  def number_of_types(self):
     return self.__number
 
-  @number.setter
-  def number(self, n):
+  @number_of_types.setter
+  def number_of_types(self, n):
     self.__number = int.from_bytes(n, byteorder = 'little')
 
   @property
-  def hwinfo(self):
+  def hardware_info(self):
     return self.__hwinfo
 
-  @hwinfo.setter
-  def hwinfo(self, hi):
+  @hardware_info.setter
+  def hardware_info(self, hi):
     self.__hwinfo = hi
 
 
@@ -373,7 +474,7 @@ def tzx_convert(tzx_file, tap_dir):
         tap_name = tap_name[0:8 - len(tap_idx_s)] + tap_idx_s
       else:
         tap_names[tap_name] = 1
-      tap_filename = re.sub(r'[\\/:\*"<>|?]', "_", tap_name + '.TAP')
+      tap_filename = re.sub(r'[\\/:\*"<>|?\.]', "_", tap_name) + '.TAP'
       tap_pathname = os.path.join(tap_dir, tap_filename)
       print(os.path.basename(tzx_file), file = sys.stderr)
       print("  +--> Found header block of length %d bytes" % tzx_hdr.block_length, file = sys.stderr)
@@ -408,7 +509,7 @@ def tzx_to_tap(tzx_files, root_dir, force):
 if __name__ == '__main__':
   import argparse
 
-  __VERSION = "1.0.1"
+  __VERSION = "2.0.0"
 
   default_root_dir = os.path.realpath(".")
 
