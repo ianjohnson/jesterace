@@ -61,3 +61,37 @@ tapls.py FireOne.tap
 ```
 
 You can specify as many TAP files as you require.
+
+## Auto-run TAP files
+
+Using programs and playing games on the Minstrel 4th can be a bit tricky if you don't know, or if you've forgotten how to load and run them. Even if programs do not require a multi-step loading procedure, remembering the run instructions is difficult since there is consistent word used to run Forth programs. Machine code programs can be located anywhere in memory. So we must remember which memory location to call to start the program.
+
+The `tapautorun.py` script allows you to generate a TAP file that will automatically load and run a Forth or machine code program. The TAP file is loaded in the same way no matter which program to auto-run. The limitation is that the resultant command given to this script is no longer than 31 characters.
+
+### Auto-run example for Ace Star
+
+Assuming the TZX file has been converted to a TAP file called `astar.tap`, from the [Ace Star](https://www.jupiter-ace.co.uk/sw_dstar.html) ZIP file, an auto-run TAP file can be made with:
+
+```
+tapautorun.py 0 0 bload astar 16384 call
+```
+
+Move the `exec.tap` file to the same directory as `astar.tap` is located. To auto-run Ace Star type:
+
+```
+0 0 bload exec
+```
+
+### Auto-run example for Firebird
+
+Convert the `Firebird-108.tzx` file, from the [Firebird](https://www.jupiter-ace.co.uk/sw_Firebird_VoyagerSoftware.html) ZIP file, to `firebird.tap`. Create an auto-run TAP file with:
+
+```
+tapautorun.py load firebird run
+```
+
+Move the generated `exec.tap` to the same location of the `firebird.tap` file. To auto-run Firebird type:
+
+```
+0 0 bload exec
+```
