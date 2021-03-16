@@ -99,7 +99,7 @@ def autorun(tap_name, tap_dir, force, command):
 if __name__ == '__main__':
   import argparse
 
-  __VERSION = "1.0.0"
+  __VERSION = "1.0.1"
 
   default_tap_name = "exec"
   default_tap_dir = os.path.curdir
@@ -115,7 +115,7 @@ if __name__ == '__main__':
                       type = str,
                       dest = 'tap_dir',
                       default = default_tap_dir,
-                      help = 'Name of the generated TAP file (default: %s)' % default_tap_dir)
+                      help = 'Directory that the auto-run TAP file is to be written (default: %s)' % default_tap_dir)
   parser.add_argument('-f', '--force',
                       dest = 'force',
                       action = 'store_true',

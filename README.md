@@ -95,3 +95,15 @@ Move the generated `exec.tap` to the same location of the `firebird.tap` file. T
 ```
 0 0 bload exec
 ```
+
+## Covert TAP files to Forth Source Code
+
+The Forth TAP files written by the Jester Ace can be converted to Forth source code files using `tap2forth.py`.
+
+### Forth Source Code from Firebird
+
+The following command line will write the Forth source code to a file called `firebird.fs`.
+
+```
+tap2forth.py firebird.tap
+```
