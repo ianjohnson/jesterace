@@ -36,7 +36,7 @@ Spliting the Fire One TAP file:
 tapsplit.py FireOne.tap
 ```
 
-This will generate two files: `FIRE.TAP` and `ONE.TAP`. These files can be copied to the SD card used with the Jester Ace.
+This will generate two files: `FIRE.TAP` and `ONE.TAP` in a directory called 'FIREONE'. Copy the directory to the SD card used with the Jester Ace.
 
 ## Using Jester Ace TAP files with Emulators
 

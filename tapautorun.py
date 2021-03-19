@@ -27,6 +27,9 @@ import os
 import sys
 
 
+MAX_COMMAND_LEN = 32
+
+
 class TapBlock(object):
   def __init__(self):
     self._data = bytearray()
@@ -84,8 +87,9 @@ def autorun(tap_name, tap_dir, force, command):
     print("TAP file [%s] exists" % tap_filename, file = sys.stderr)
     sys.exit(1)
 
-  if len(command) > 31:
-    print("Command, of length %d, [%s] is too long, 31 characters maximum" % (len(command), command))
+  if len(command) > MAX_COMMAND_LEN:
+    print("Command, of length %d, [%s] is too long, %d characters maximum" % \
+          (len(command), command, MAX_COMMAND_LEN))
     sys.exit(1)
 
   hdr_block = HeaderTapBlock(tap_name)
@@ -99,7 +103,7 @@ def autorun(tap_name, tap_dir, force, command):
 if __name__ == '__main__':
   import argparse
 
-  __VERSION = "1.0.1"
+  __VERSION = "1.0.2"
 
   default_tap_name = "exec"
   default_tap_dir = os.path.curdir

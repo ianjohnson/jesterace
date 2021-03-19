@@ -79,47 +79,80 @@ class Data(Block):
       raise BlockUnexpectedTypeException("header", pos, self._data[2])
 
 
-def tap_split(tap_file, max_filename_len):
-  while(True):
+def tap_split(tap_file, tap_dir):
+  with open(tap_file, "rb") as tap_file_fd:
+    print(tap_file)
+    tap_names = dict()
+    while(True):
+      try:
+        header = Header(tap_file_fd)
+      except BlockDataExhausted:
+        break
+      try:
+        data = Data(tap_file_fd)
+      except BlockDataExhausted as ex:
+        print("%s file is corrupt" % header.filename(), file = sys.stderr)
+        raise ex
+      print("\tFound program [%s] (%d:%d)" % (header.filename(), header.block_length(), data.block_length()), end = '')
+      valid_split_filename = header.filename()[:8]
+      if valid_split_filename in tap_names:
+        tap_idx = tap_names[valid_split_filename]
+        tap_idx += 1
+        tap_names[valid_split_filename] = tap_idx
+        tap_idx_s = "_%d" % tap_idx
+        unique_split_filename = valid_split_filename[0:-len(tap_idx_s)] + tap_idx_s
+      else:
+        tap_names[valid_split_filename] = 1
+        unique_split_filename = valid_split_filename
+      split_filename = (unique_split_filename + '.tap').upper()
+      print(", writing split file to [%s]..." % split_filename)
+      with open(os.path.join(tap_dir, split_filename), "wb") as split_tap:
+        header.write_data(split_tap)
+        data.write_data(split_tap)
+
+
+def taps_split(tap_files, root_dir, force):
+  for tap_file in tap_files:
+    tap_dirname, _ = os.path.splitext(os.path.basename(tap_file))
+    tap_dirname = tap_dirname[:8].upper()
+    tap_dir = os.path.realpath(os.path.join(root_dir, tap_dirname))
+    if not force and os.path.exists(tap_dir):
+      print("%s: TAP directory [%s] exists" % (os.path.realpath(tap_file), tap_dir),
+            file = sys.stderr)
+      return False
+    else:
+      os.mkdir(tap_dir)
+
     try:
-      header = Header(tap_file)
-    except BlockDataExhausted:
-      break
-    try:
-      data = Data(tap_file)
-    except BlockDataExhausted as ex:
-      print("%s file is corrupt" % header.filename(), file = sys.stderr)
+      tap_split(tap_file, tap_dir)
+    except Exception as ex:
+      os.rmdir(tap_dir)
       raise ex
-    print("Found %s (%d:%d)" % (header.filename(), header.block_length(), data.block_length()))
-    split_filename = (header.filename()[:max_filename_len] + '.tap').upper()
-    print("\tSplit file to %s..." % split_filename)
-    with open(split_filename, "wb") as split_tap:
-      header.write_data(split_tap)
-      data.write_data(split_tap)
 
 
 if __name__ == '__main__':
   import argparse
 
-  __VERSION = "1.0.3"
+  __VERSION = "1.1.0"
+  default_root_dir = os.path.realpath(".")
   default_max_filename_len = 8
 
   parser = argparse.ArgumentParser(prog = "tapsplit.py",
                                    description = "Creates separate TAP files from a multi-program TAP file (v%s)." % __VERSION)
-  parser.add_argument('-m', '--maxnamelen',
-                      type = int,
-                      dest = 'max_filename_len',
-                      default = default_max_filename_len,
-                      help = 'Maximum length of TAP file name split out (default: %d)' % default_max_filename_len)
+  parser.add_argument('-f', '--force',
+                      dest = 'force',
+                      action = 'store_true',
+                      help = 'Force conversion if TAP directory exists')
+  parser.add_argument('-d', '--rootdir',
+                      type = str,
+                      dest = 'root_dir',
+                      default = default_root_dir,
+                      help = 'Directory to which the TAP directory structure will be written (default: %s)' % default_root_dir)
   parser.add_argument('tap_file',
                       type = str,
+                      nargs = '+',
                       default = '',
                       help = 'TAP file to split')
   args = parser.parse_args()
 
-  if not os.path.exists(args.tap_file):
-    print("TAP file [%s] does not exist" % args.tap_file, file = sys.stderr)
-    sys.exit(1)
-
-  with open(args.tap_file, "rb") as tap_file:
-    tap_split(tap_file, args.max_filename_len)
+  taps_split(args.tap_file, args.root_dir, args.force)
