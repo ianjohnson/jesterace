@@ -38,7 +38,6 @@ class Formatter(object):
 
   def add(self, string):
     v = str(string) + ' '
-    #print("PRE APPEND %d" % (len(v) + len(self.__buffer)))
     if len(v) + len(self.__buffer) > self.__max_line_length:
       self.flush('\n')
     self.__buffer += v
@@ -148,14 +147,23 @@ for addr, word_name in [(0x0099, "QUIT"), (0x00ab, "ABORT"), (0x0460, "HERE"), (
                         (0x1d59, "UFLOAT"), (0x3c4a, "FORTH")]:
   FORTH_WORDS[addr] = InternalWord(word_name)
 
+def sixteen_bit_integer_processor(number_bytes):
+  orig_num = int.from_bytes(number_bytes, "little")
+  comment = ""
+  if orig_num > 32767:
+    num = ((~(orig_num & 0x7fff)) & 0x7fff) + 1
+    return "-%d" % num
+  else:
+    return "%d" % orig_num
+
 # Definition words
 FORTH_WORDS[0x0ec3] = DefinitionWord(lambda wn, _, wp: (": %s" % wn, 0))
 FORTH_WORDS[0x0fec] = DefinitionWord(lambda wn, _, wp: ("CREATE %s %d ALLOT" % (wn, len(wp)),
-                                                                  len(wp)) if len(wp) > 152 else \
+                                                        len(wp)) if len(wp) > 152 else \
                                      ("( May be CREATE %s %d ALLOT )\nCREATE %s %s" % \
                                       (wn, len(wp), wn, ' '.join(map(lambda b: '%d c,' % b, wp))), len(wp)))
-FORTH_WORDS[0x0ff0] = DefinitionWord(lambda wn, _, wp: ("%d VARIABLE %s" % (int.from_bytes(wp[0 : 2], "little"), wn), len(wp)))
-FORTH_WORDS[0x0ff5] = DefinitionWord(lambda wn, _, wp: ("%d CONSTANT %s" % (int.from_bytes(wp[0 : 2], "little") , wn), len(wp)))
+FORTH_WORDS[0x0ff0] = DefinitionWord(lambda wn, _, wp: ("%s VARIABLE %s" % (sixteen_bit_integer_processor(wp[0 : 2]), wn), len(wp)))
+FORTH_WORDS[0x0ff5] = DefinitionWord(lambda wn, _, wp: ("%s CONSTANT %s" % (sixteen_bit_integer_processor(wp[0 : 2]) , wn), len(wp)))
 def definer_definition(word_name, _, word_parameters):
   def_word = DefinitionWord(lambda wn, _, wp: ('%s %s %s' % (word_name, wn, ' '.join(map(lambda b: '%d c,' % b, wp))), len(wp)))
   FORTH_WORDS[int.from_bytes(word_parameters[0 : 2], "little")] = def_word
@@ -181,7 +189,7 @@ def char_processor(b):
     return "%c" % (b & 0x7f)
 
 # Stack next 16 bit word
-FORTH_WORDS[0x1011] = InternalWord(processor = lambda wp, idx: int.from_bytes(wp[idx + 2 : idx + 4], "little"),
+FORTH_WORDS[0x1011] = InternalWord(processor = lambda wp, idx: sixteen_bit_integer_processor(wp[idx + 2 : idx + 4]),
                                    new_idx = lambda p, idx: idx + 4)
 FORTH_WORDS[0x104b] = InternalWord("ASCII",
                                    lambda p, idx: char_processor(p[idx + 2]),
@@ -361,7 +369,7 @@ def decompile(directory, force, tap_files, max_line_size):
 if __name__ == '__main__':
   import argparse
 
-  __VERSION = "1.0.0"
+  __VERSION = "1.0.1"
 
   default_tap_name = "exec"
   default_tap_dir = os.path.curdir
