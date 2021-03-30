@@ -27,7 +27,7 @@ import os
 import sys
 
 
-MAX_COMMAND_LEN = 32
+MAX_COMMAND_LEN = 31
 
 
 class TapBlock(object):
@@ -103,7 +103,7 @@ def autorun(tap_name, tap_dir, force, command):
 if __name__ == '__main__':
   import argparse
 
-  __VERSION = "1.0.2"
+  __VERSION = "1.0.3"
 
   default_tap_name = "exec"
   default_tap_dir = os.path.curdir
