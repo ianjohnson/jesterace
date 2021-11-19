@@ -108,7 +108,7 @@ The following command line will write the Forth source code to a file called `fi
 tap2forth.py firebird.tap
 ```
 
-### Create Forth Words from Machine Code Binary Files
+## Create Forth Words from Machine Code Binary Files
 
 The Jupiter Ace maunal (Chapter 25) shows users how to encapsulate machine code in Forth words. The tool `bin2forth.py` allows you to use the output of your favourite Z80 assembler and create Forth words using this machine code. Your assembler is required to output a raw binary file of the assembled Z80 code. Assuming you have a raw binary file called `findword.bin`, using the following command line:
 
