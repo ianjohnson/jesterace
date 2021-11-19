@@ -107,3 +107,42 @@ The following command line will write the Forth source code to a file called `fi
 ```
 tap2forth.py firebird.tap
 ```
+
+### Create Forth Words from Machine Code Binary Files
+
+The Jupiter Ace maunal (Chapter 25) shows users how to encapsulate machine code in Forth words. The tool `bin2forth.py` allows you to use the output of your favourite Z80 assembler and create Forth words using this machine code. Your assembler is required to output a raw binary file of the assembled Z80 code. Assuming you have a raw binary file called `findword.bin`, using the following command line:
+
+```
+bin2forth.py -o findword.bin
+```
+
+will generate a Forth word called `FINDWORD` using hexadecimal for the machine code bytes:
+
+```forth
+DEFINER CODE
+DOES>
+	CALL
+;
+
+16 BASE C!
+
+CODE FINDWORD DF C, AF C, 47 C, 1A C, 4F C, 13 C, 2A C, ...  C3 C, 8A C, 06 C,
+
+DECIMAL
+```
+
+It is also possible to use the `CREATE` Forth word to create executable machine code. The `bin2forth.py` tool can generate these words using the following command line:
+
+```
+bin2forth.py -x findword.bin
+```
+
+This generates the following:
+
+```forth
+16 BASE C!
+
+CREATE FINDWORD DF C, AF C, 47 C, 1A C, 4F C, 13 C, 2A C, ... C3 C, 8A C, 06 C, FINDWORD DUP 2- !
+
+DECIMAL
+```
