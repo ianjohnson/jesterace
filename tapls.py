@@ -24,6 +24,7 @@
 ########################################################################
 import functools
 import os
+import sys
 
 
 class BlockDataExhausted(Exception):
@@ -44,13 +45,13 @@ class Block(object):
     return self.__block_length
 
   @property
-  def is_header(self):
-    return True if self.__data[0] == 0 else False
+  def is_v2_header_block(self):
+    return True if self.__block_length == 27 and self.__data[0] == 0 else False
 
-  @property
-  def valid_checksum(self):
-    checksum = functools.reduce(lambda acc, b: acc ^ b, self.__data[1:-1], 0)
-    return True if checksum == self.__data[-1] else False
+  def valid_checksum(self, is_v2_tap_file):
+    slice = self.__data[1:-1] if is_v2_tap_file else self.__data[:-1]
+    checksum = functools.reduce(lambda acc, b: acc ^ b, slice, 0)
+    return (True, checksum) if checksum == self.__data[-1] else (False, checksum, self.__data[-1])
 
   def data(self, *slice_idxs):
     idx_len = len(slice_idxs)
@@ -61,20 +62,24 @@ class Block(object):
     return self.__data[slice_idxs[0]:slice_idxs[1]]
 
 
-def tap_list(tap_filenames):
-  tap_crc_error = lambda block: ", CRC ERROR" if not block.valid_checksum else ""
+def tap_list(tap_filenames, is_v2_verification):
+  def tap_crc_error(block, is_v2):
+    vcsd = block.valid_checksum(is_v2)
+    if not vcsd[0]:
+      return ", CRC ERROR (checksum [%.2x], expected [%.2x])" % (vcsd[1], vcsd[2])
+    return ""
   for tap_filename in map(lambda fn: os.path.relpath(fn), tap_filenames):
     with open(tap_filename, 'rb') as tap_fd:
       try:
         print(tap_filename)
         while True:
           hdr_block = Block(tap_fd)
-          if hdr_block.is_header:
-            data_block = Block(tap_fd)
-            filename = hdr_block.data(2, 12).decode('utf-8')
-            print("\t%s" % filename)
-            print("\t\tHeader Block: %d bytes%s" % (hdr_block.block_length, tap_crc_error(hdr_block)))
-            print("\t\t  Data Block: %d bytes%s" % (data_block.block_length, tap_crc_error(data_block)))
+          data_block = Block(tap_fd)
+          is_v2_file = True if is_v2_verification else hdr_block.is_v2_header_block
+          filename = hdr_block.data(2, 12).decode('utf-8') if hdr_block.is_v2_header_block else hdr_block.data(1,11).decode('utf-8')
+          print("\t%s" % filename)
+          print("\t\tHeader Block: %d bytes%s" % (hdr_block.block_length, tap_crc_error(hdr_block, is_v2_file)))
+          print("\t\t  Data Block: %d bytes%s" % (data_block.block_length, tap_crc_error(data_block, is_v2_file)))
       except BlockDataExhausted:
         pass
 
@@ -82,14 +87,18 @@ def tap_list(tap_filenames):
 if __name__ == '__main__':
   import argparse
 
-  __VERSION = "1.0.0"
+  __VERSION = "1.1.0"
 
   parser = argparse.ArgumentParser(prog = "tapls.py",
                                    description = "List the contents of a TAP file (v%s)." % __VERSION)
+  parser.add_argument('--v2',
+                      dest = 'is_v2_verification',
+                      action = 'store_true',
+                      help = 'Enable Jester Ace v2 TAP file verification')
   parser.add_argument('tap_file',
                       nargs = '+',
                       type = str,
-                      help = 'TAP file to split')
+                      help = 'TAP filename')
   args = parser.parse_args()
 
-  tap_list(args.tap_file)
+  tap_list(args.tap_file, args.is_v2_verification)

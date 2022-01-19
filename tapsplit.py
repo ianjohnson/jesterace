@@ -64,18 +64,25 @@ class Header(Block):
   def __init__(self, tap_file):
     pos = tap_file.tell()
     super(Header, self).__init__(tap_file)
-    if self._data[2] != 0x00:
+    self.__is_v2_tap = True if self.block_length == 27 else False
+    if self.__is_v2_tap and self._data[2] != 0x00:
       raise BlockUnexpectedTypeException("header", pos, self._data[2])
 
+  @property
+  def is_v2_tap_file(self):
+    return self.__is_v2_tap
+
   def filename(self):
-    return self._data[4:14].decode("utf-8").strip()
+    if self.is_v2_tap_file:
+      return self._data[4:14].decode("utf-8").strip()
+    return self._data[3:13].decode("utf-8").strip()
 
 
 class Data(Block):
-  def __init__(self, tap_file):
+  def __init__(self, tap_file, is_v2_tap):
     pos = tap_file.tell()
     super(Data, self).__init__(tap_file)
-    if self._data[2] != 0xff:
+    if is_v2_tap and self._data[2] != 0xff:
       raise BlockUnexpectedTypeException("header", pos, self._data[2])
 
 
@@ -89,7 +96,7 @@ def tap_split(tap_file, tap_dir):
       except BlockDataExhausted:
         break
       try:
-        data = Data(tap_file_fd)
+        data = Data(tap_file_fd, header.is_v2_tap_file)
       except BlockDataExhausted as ex:
         print("%s file is corrupt" % header.filename(), file = sys.stderr)
         raise ex

@@ -255,38 +255,46 @@ class TapBlock(object):
     self._data = tap_file.read(self.__block_length)
     if not self._data or len(self._data) != self.__block_length:
       raise BlockDataExhausted
-    self._checksum = functools.reduce(lambda acc, b: acc ^ b, self._data[1:-1], 0)
-    if self._checksum != self._data[-1]:
-      raise BlockDataCorruption("Block checksum 0x%x, expected 0x%x" % (self._data[-1], self._checksum))
-    self.__origin = int.from_bytes(self._data[14:16], "little")
-
-  @property
-  def origin(self):
-    return self.__origin
-
-  @property
-  def program_type(self):
-    return self.__program_type
 
   @property
   def length(self):
     return self.__block_length
 
+  def verify_checksum(self, is_v2):
+    slice = self._data[1:-1] if is_v2 else self._data[:-1]
+    self._checksum = functools.reduce(lambda acc, b: acc ^ b, slice, 0)
+    if self._checksum != self._data[-1]:
+      raise BlockDataCorruption("Block checksum 0x%x, expected 0x%x" % (self._data[-1], self._checksum))
+
 
 class HeaderBlock(TapBlock):
   def __init__(self, tap_file):
     super(HeaderBlock, self).__init__(tap_file)
-    if self._data[1] != 0x00:
+    self.__is_v2_tap = True if self.length == 27 else False
+    if self.__is_v2_tap and self._data[1] != 0x00:
       raise BlockDataNotSupportedType("Unsupported program type [0x%x]" % self._data[1])
+    self.verify_checksum(self.__is_v2_tap)
+
+  @property
+  def is_v2_tap_file(self):
+    return self.__is_v2_tap
+
+  @property
+  def origin(self):
+    slice = self._data[14:16] if self.is_v2_tap_file else self._data[13:15]
+    origin = int.from_bytes(slice, "little")
+    return origin
 
 
 class DataBlock(TapBlock):
-  def __init__(self, tap_file):
+  def __init__(self, tap_file, is_v2):
     super(DataBlock, self).__init__(tap_file)
+    self.__is_v2_tap = is_v2
+    self.verify_checksum(self.__is_v2_tap)
 
   def decompile(self, origin, formatter = None):
     words = list()
-    idx = 1
+    idx = 1 if self.__is_v2_tap else 0
     while idx < len(self._data) - 1:
       # Extract name
       name = ''
@@ -310,7 +318,8 @@ class DataBlock(TapBlock):
       idx += 2
       parameters = self._data[idx : idx + (word_length - 7)]
       idx += (word_length - 7)
-      word = Word(name, word_name_length, word_length, word_exec_addr + 1, code_addr_field, parameters)
+      word_exec_addr = word_exec_addr + 1 if self.__is_v2_tap else word_exec_addr + 2
+      word = Word(name, word_name_length, word_length, word_exec_addr, code_addr_field, parameters)
       FORTH_WORDS[word.exec_addr] = word
       words.append(word)
 
@@ -356,7 +365,7 @@ def decompile(directory, force, tap_files, max_line_size):
   for tap_file in tap_files:
     with open(tap_file, "rb") as forth_tap_fd:
       hdr = HeaderBlock(forth_tap_fd)
-      data = DataBlock(forth_tap_fd)
+      data = DataBlock(forth_tap_fd, hdr.is_v2_tap_file)
       forth_name = os.path.splitext(os.path.basename(tap_file))[0].lower()
       forth_filename = os.path.join(directory, forth_name + '.fs')
       if not force and os.path.exists(forth_filename):
@@ -369,7 +378,7 @@ def decompile(directory, force, tap_files, max_line_size):
 if __name__ == '__main__':
   import argparse
 
-  __VERSION = "1.0.1"
+  __VERSION = "1.0.3"
 
   default_tap_name = "exec"
   default_tap_dir = os.path.curdir
